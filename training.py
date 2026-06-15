@@ -1,5 +1,5 @@
 from activations import Activations
-from av import AV
+from av_model import AV
 from ar import AR
 import torch
 import itertools
