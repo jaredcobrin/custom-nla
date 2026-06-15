@@ -25,7 +25,7 @@ class AR:
         self.model.model.lm_head = torch.nn.Identity()
         self.model.model.model.norm = torch.nn.Identity()
         self.value_head = torch.nn.Linear(self.d_model, self.d_model)
-
+        self.value_head = self.value_head.to(torch.bfloat16)
 
 
     def forward_pass(self, explanations: list[str], batch_size, GRPO_size):

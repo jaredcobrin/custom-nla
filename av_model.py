@@ -52,7 +52,7 @@ class AV:
         expl_output = self.model.generate(inputs_embeds=prompt_token_embeddings, num_return_sequences=GRPO_size, do_sample=do_sample, temperature=temperature, max_new_tokens=150)
         #out_expl = expl_output[:, len(prompt_token_ids["input_ids"][0]):]
 
-        batch_explanation = self.tokenizer.batch_decode(expl_output)
+        batch_explanation = self.tokenizer.batch_decode(expl_output, skip_special_tokens=True)
         log_probs = self.extract_log_probs(expl_output, prompt_token_ids, prompt_token_embeddings, GRPO_size)
         explanations.extend(batch_explanation)
         return explanations, log_probs, expl_output

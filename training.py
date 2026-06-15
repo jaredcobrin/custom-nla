@@ -15,6 +15,7 @@ def setup():
     # 1: EXTRACT ACTIVATIONS
 
     activation_model = Activations(model_id="Qwen/Qwen2.5-1.5B")
+    activation_model.tokenizer.padding_side = "left"
     activation_model.model.to(device)
 
 
@@ -78,7 +79,7 @@ def train(ai_prompts: list[str], paraphrase_prompt: str, av_prompt: str, semanti
             paraphrase_prompt_token_ids = activation_model.tokenizer(paraphrase_prompt_expl, return_tensors="pt", padding=True).to(device)
             paraphrase_expl_tokens = activation_model.model.generate(input_ids=paraphrase_prompt_token_ids["input_ids"], attention_mask=paraphrase_prompt_token_ids["attention_mask"], max_new_tokens=150, num_return_sequences=1, do_sample=True, temperature=0.7)
             paraphrase_expl_only_tokens = paraphrase_expl_tokens[:, len(paraphrase_prompt_token_ids["input_ids"][0]):]
-            paraphrase_expl = activation_model.tokenizer.batch_decode(paraphrase_expl_only_tokens)
+            paraphrase_expl = activation_model.tokenizer.batch_decode(paraphrase_expl_only_tokens, skip_special_tokens=True)
             if (i % 10 == 0):
                 print(f"Paraphrase_Explanation: {paraphrase_expl[0]}")
                 print(f"Paraphrase_Explanation: {paraphrase_expl[1]}")
