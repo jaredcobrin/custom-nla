@@ -1,0 +1,1 @@
+av_prompt_ = "The following token holds a compressed snapshot of a language model's internal state while it was reading some text: <OVERHERE> In one or two sentences, describe the concept, topic, or meaning that this internal state most likely represents. Explanation: "      

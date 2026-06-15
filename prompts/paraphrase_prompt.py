@@ -1,0 +1,1 @@
+para_prompt = "Reword the following text so it keeps exactly the same meaning but uses different words and phrasing:"

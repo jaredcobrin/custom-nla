@@ -1,0 +1,1 @@
+sm_prompt = "On a scale of 1 to 5, rate how coherent and sensible the text above is. Answer with a single digit (1-5)."
