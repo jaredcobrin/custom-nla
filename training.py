@@ -7,22 +7,16 @@ import random
 import checkpoints
 
 
-batch_size = 8
-GRPO_size = 8
-# PROMPTS
-ai_prompts = ["what is 10 + 10",
-              "What is the meaning of life"
-              ]
-prompt = "I will be injecting in activations into this token: <OVERHERE>, your goal, is to convert these activations, into an explanation for what this model was thinking when reading the prompt."      
-paraphrase_prompt = "paraphrase the following:"
-semantic_meaning_prompt = "Please rate this on a scale of 1-5 based on how much it makes sense."
-
 def setup():
     
-    
+    # LOAD DEVICE
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")   
+
     # 1: EXTRACT ACTIVATIONS
 
     activation_model = Activations(model_id="Qwen/Qwen2.5-1.5B")
+    activation_model.model.to(device)
+
 
     # 1.1 token ids of paraphrase_prompt, semantic meaning prompt.
     #paraphrase_prompt_token_ids = activation_model.tokenizer(paraphrase_prompt, return_tensors="pt")
@@ -33,10 +27,15 @@ def setup():
             r_value=16, 
             target_module=["q_proj", "k_proj", "o_proj", "v_proj"], 
             lora_alpha=32)
-    ar = AR( model_id="Qwen/Qwen2.5-1.5B", 
+    av.model.to(device)
+
+    ar = AR(model_id="Qwen/Qwen2.5-1.5B", 
             r_value=16,  
             target_module=["q_proj", "k_proj", "o_proj", "v_proj"], 
             lora_alpha=32)
+    ar.model.to(device)
+    ar.value_head.to(device)
+
 
     # 2.1 CREATE OPTIMIZERS
     av_optimizer = torch.optim.AdamW(av.model.parameters(), lr=1e-4)
@@ -46,6 +45,9 @@ def setup():
 
     # pt2: TRAINING LOOP: Forward & Backpass
 def train(ai_prompts: list[str], paraphrase_prompt: str, av_prompt: str, semantic_meaning_prompt: str, activation_model, av, ar, av_optimizer, ar_optimizer, total_steps, ar_parameters, batch_size, GRPO_size):    
+    
+    # LOAD DEVICE
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")    
     # 0: load checkpoint: 
     start_step = checkpoints.load_checkpoints(av, ar, av_optimizer, ar_optimizer)
     try:
@@ -73,8 +75,8 @@ def train(ai_prompts: list[str], paraphrase_prompt: str, av_prompt: str, semanti
             paraphrase_prompt_expl = []
             for expl in GRPO_expl:
                 paraphrase_prompt_expl.append(paraphrase_prompt + expl + "\nParaphrase: ")
-            paraphrase_prompt_token_ids = activation_model.tokenizer(paraphrase_prompt_expl, return_tensors="pt", padding=True)
-            paraphrase_expl_tokens = activation_model.model.generate(input_ids=paraphrase_prompt_token_ids["input_ids"], attention_mask=paraphrase_prompt_token_ids["attention_mask"])
+            paraphrase_prompt_token_ids = activation_model.tokenizer(paraphrase_prompt_expl, return_tensors="pt", padding=True).to(device)
+            paraphrase_expl_tokens = activation_model.model.generate(input_ids=paraphrase_prompt_token_ids["input_ids"], attention_mask=paraphrase_prompt_token_ids["attention_mask"], max_new_tokens=150, num_return_sequences=1, do_sample=True, temperature=0.7)
             paraphrase_expl_only_tokens = paraphrase_expl_tokens[:, len(paraphrase_prompt_token_ids["input_ids"][0]):]
             paraphrase_expl = activation_model.tokenizer.batch_decode(paraphrase_expl_only_tokens)
             if (i % 10 == 0):
@@ -82,8 +84,8 @@ def train(ai_prompts: list[str], paraphrase_prompt: str, av_prompt: str, semanti
                 print(f"Paraphrase_Explanation: {paraphrase_expl[1]}")
             # 3: run though ar 
             
-            GRPO_ar_activations = ar.forward_pass(explanations=GRPO_expl)
-            paraphrase_ar_activations = ar.forward_pass(explanations=paraphrase_expl)
+            GRPO_ar_activations = ar.forward_pass(explanations=GRPO_expl, batch_size=batch_size, GRPO_size=GRPO_size)
+            paraphrase_ar_activations = ar.forward_pass(explanations=paraphrase_expl, batch_size=batch_size, GRPO_size=GRPO_size)
 
             # 4: compute reward functions
             GRPO_ar_activations = GRPO_ar_activations.reshape(batch_size, GRPO_size, 1536)
@@ -98,13 +100,13 @@ def train(ai_prompts: list[str], paraphrase_prompt: str, av_prompt: str, semanti
                 
             # 4.3 implement semantic meaning
             semantic_meaning_prompt_expl = []
-            index_tensor = torch.arange(batch_size*GRPO_size)
+            index_tensor = torch.arange(batch_size*GRPO_size).to(device)
             for expl in GRPO_expl:
                 semantic_meaning_prompt_expl.append(expl + semantic_meaning_prompt + " Rating:")
-            semantic_meaning_prompt_token_ids = activation_model.tokenizer(semantic_meaning_prompt_expl, return_tensors="pt", padding=True)
+            semantic_meaning_prompt_token_ids = activation_model.tokenizer(semantic_meaning_prompt_expl, return_tensors="pt", padding=True).to(device)
             sum_mask = semantic_meaning_prompt_token_ids["attention_mask"].sum(dim=1) - 1
             logits = activation_model.model(input_ids = semantic_meaning_prompt_token_ids["input_ids"], attention_mask = semantic_meaning_prompt_token_ids["attention_mask"]).logits[index_tensor, sum_mask, :]
-            onefive = torch.tensor([[1], [2], [3], [4], [5]], dtype=torch.float32)
+            onefive = torch.tensor([[1], [2], [3], [4], [5]], dtype=torch.float32).to(device)
             one_to_five = activation_model.tokenizer.convert_tokens_to_ids(["1", "2", "3", "4", "5"])
             one_to_five_logits = logits[:, one_to_five]
             softmax_one_to_five = torch.softmax(one_to_five_logits, dim=-1)

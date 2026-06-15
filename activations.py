@@ -1,4 +1,4 @@
-from transformers import AutoTokenizer, AutoModel
+from transformers import AutoTokenizer, AutoModelForCausalLM
 import torch
 
 model_id = "Qwen/Qwen2.5-1.5B"
@@ -11,7 +11,7 @@ prompts = [
 # put in sentences
 class Activations:
     def __init__(self, model_id: str):
-        self.model = AutoModel.from_pretrained(model_id)
+        self.model = AutoModelForCausalLM.from_pretrained(model_id)
         self.model.requires_grad_(False)
         self.tokenizer = AutoTokenizer.from_pretrained(model_id)
         self.model.eval()
@@ -34,9 +34,9 @@ class Activations:
             # make vector of activations
             activations_batch_vector = output[batch_indexes, final_tokens, :]  # [batch_size, 1536]
             # take out last 
-            self.current_activations.append(activations_batch_vector.detach().cpu())
+            self.current_activations.append(activations_batch_vector.detach())
 
-        handle = self.model.layers[layer].register_forward_hook(hook)
+        handle = self.model.model.layers[layer].register_forward_hook(hook)
         
         for i in range(0, len(prompts), self.batch_size):
             batch_prompts = prompts[i: i + self.batch_size]

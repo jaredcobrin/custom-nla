@@ -29,10 +29,13 @@ class AV:
         self.special_token_id = self.tokenizer.convert_tokens_to_ids("<OVERHERE>")
         
     def av_forward_pass(self, base_activations, prompt, batch_size: int, GRPO_size: int, temperature: float, do_sample: bool): # GRPO must be multiple of batch_size
+        # LOAD DEVICE
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")   
+
         explanations = []
-        prompt_token_ids = self.tokenizer(prompt, return_tensors="pt")
+        prompt_token_ids = self.tokenizer(prompt, return_tensors="pt").to(device)
         # special token id
-        prompt_token_embeddings = self.model.model.embed_tokens(prompt_token_ids["input_ids"])
+        prompt_token_embeddings = self.model.get_input_embeddings()(prompt_token_ids["input_ids"])
         # repeat for batch size - > (batch_size, prompt_length, model_dimensions)
         prompt_token_embeddings = prompt_token_embeddings.repeat(batch_size, 1, 1)
         #loop through prompt tokens
@@ -46,7 +49,7 @@ class AV:
         scaled_activations = base_activations*(self.target_norm()/self.activation_norm(base_activations))
         prompt_token_embeddings[:, special_token_id_position] = scaled_activations
         # run model # might need to repeat(8,1,1)
-        expl_output = self.model.generate(inputs_embeds=prompt_token_embeddings, num_return_sequences=GRPO_size, do_sample=do_sample, temperature=temperature)
+        expl_output = self.model.generate(inputs_embeds=prompt_token_embeddings, num_return_sequences=GRPO_size, do_sample=do_sample, temperature=temperature, max_new_tokens=150)
         #out_expl = expl_output[:, len(prompt_token_ids["input_ids"][0]):]
 
         batch_explanation = self.tokenizer.batch_decode(expl_output)
@@ -59,10 +62,10 @@ class AV:
         normed_base_activations = normed_base_activations.unsqueeze(dim=-1)
         return normed_base_activations
     def target_norm(self):
-        return self.model.model.embed_tokens.weight.norm(dim=1).mean()
+        return self.model.get_input_embeddings().weight.norm(dim=1).mean()
     
     def extract_log_probs(self, expl_output, prompt_token_ids, prompt_token_embeddings, GRPO_size):
-        generated_embeds = self.model.model.embed_tokens(expl_output)
+        generated_embeds = self.model.get_input_embeddings()(expl_output)
         prompt_and_expl_embeds = torch.cat([prompt_token_embeddings.repeat_interleave(GRPO_size, dim=0), generated_embeds], dim=1)
         logits = self.model(inputs_embeds=prompt_and_expl_embeds).logits
         soft_logits = torch.nn.functional.log_softmax(logits, dim=-1)
