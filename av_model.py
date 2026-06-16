@@ -50,6 +50,7 @@ class AV:
         prompt_token_embeddings[:, special_token_id_position] = scaled_activations
         # run model # might need to repeat(8,1,1)
         expl_output = self.model.generate(inputs_embeds=prompt_token_embeddings, num_return_sequences=GRPO_size, do_sample=do_sample, temperature=temperature, max_new_tokens=150)
+        print(expl_output.shape)
         #out_expl = expl_output[:, len(prompt_token_ids["input_ids"][0]):]
 
         batch_explanation = self.tokenizer.batch_decode(expl_output, skip_special_tokens=True)
