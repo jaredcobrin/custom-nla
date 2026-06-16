@@ -107,7 +107,7 @@ def train(ai_prompts: list[str], paraphrase_prompt: str, av_prompt: str, semanti
             semantic_meaning_prompt_token_ids = activation_model.tokenizer(semantic_meaning_prompt_expl, return_tensors="pt", padding=True).to(device)
             sum_mask = semantic_meaning_prompt_token_ids["attention_mask"].sum(dim=1) - 1
             logits = activation_model.model(input_ids = semantic_meaning_prompt_token_ids["input_ids"], attention_mask = semantic_meaning_prompt_token_ids["attention_mask"]).logits[index_tensor, sum_mask, :]
-            onefive = torch.tensor([[1], [2], [3], [4], [5]], dtype=torch.float32).to(device)
+            onefive = torch.tensor([[1], [2], [3], [4], [5]], dtype=torch.bfloat16).to(device)
             one_to_five = activation_model.tokenizer.convert_tokens_to_ids(["1", "2", "3", "4", "5"])
             one_to_five_logits = logits[:, one_to_five]
             softmax_one_to_five = torch.softmax(one_to_five_logits, dim=-1)
