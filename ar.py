@@ -13,7 +13,7 @@ class AR:
         self.target_module = target_module
         self.lora_alpha = lora_alpha
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_id)
-        self.model = AutoModelForCausalLM.from_pretrained(self.model_id)
+        self.model = AutoModelForCausalLM.from_pretrained(self.model_id, torch_dtype=torch.bfloat16)
         self.config = LoraConfig(
             r=self.r_value,
             target_modules=self.target_module,

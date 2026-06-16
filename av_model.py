@@ -17,7 +17,7 @@ class AV:
             "additional_special_tokens": ["<OVERHERE>"]
             }
         self.tokenizer.add_special_tokens(self.special_tokens)
-        self.model = AutoModelForCausalLM.from_pretrained(self.model_id)
+        self.model = AutoModelForCausalLM.from_pretrained(self.model_id, torch_dtype=torch.bfloat16)
         self.model.resize_token_embeddings(len(self.tokenizer))
         self.config = LoraConfig(
             r=self.r_value,

@@ -5,7 +5,7 @@ import prompts.paraphrase_prompt
 import prompts.semantic_meaning_prompt
 
 batch_size = 4
-GRPO_size = 8
+GRPO_size = 4
 
 
 

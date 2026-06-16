@@ -11,7 +11,7 @@ prompts = [
 # put in sentences
 class Activations:
     def __init__(self, model_id: str):
-        self.model = AutoModelForCausalLM.from_pretrained(model_id)
+        self.model = AutoModelForCausalLM.from_pretrained(model_id, torch_dtype=torch.bfloat16)
         self.model.requires_grad_(False)
         self.tokenizer = AutoTokenizer.from_pretrained(model_id)
         self.model.eval()
