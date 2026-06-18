@@ -95,10 +95,11 @@ def train(ai_prompts: list[str], paraphrase_prompt: str, av_prompt: str, semanti
 
             # 4.1 implement cosine similarity of GRPO
             cosine_sim_GRPO = torch.nn.functional.cosine_similarity(GRPO_ar_activations.detach(), activations_ai_prompts.unsqueeze(1), dim=-1)
-                
+            print(f"cosine_sim_GRPO: {cosine_sim_GRPO}")
             # 4.2 implement cosine similarity of paraphrase
             cosine_sim_paraphrase = torch.nn.functional.cosine_similarity(paraphrase_ar_activations.detach(), activations_ai_prompts.unsqueeze(1), dim=-1)
-                
+            print(f"cosine_sim_paraphrase: {cosine_sim_paraphrase}")
+
             # 4.3 implement semantic meaning
             semantic_meaning_prompt_expl = []
             index_tensor = torch.arange(batch_size*GRPO_size).to(device)
@@ -199,7 +200,28 @@ def train(ai_prompts: list[str], paraphrase_prompt: str, av_prompt: str, semanti
             top_k_cos_paraphase = torch.gather(cosine_sim_paraphrase, dim=1, index=top_k_normalized_rewards)
             mean_cos_sim = torch.cat([top_k_cos_GRPO, top_k_cos_paraphase], dim=0).mean()
 
-            ar_loss = 1 - mean_cos_sim
+
+
+            # 5.2.3 Cos-Sim difference.
+            top_k_GRPO = torch.gather(GRPO_ar_activations, dim=1, index=top_k_normalized_rewards.unsqueeze(-1).expand(-1, -1, 1536))
+            top_k_paraphase = torch.gather(paraphrase_ar_activations, dim=1, index=top_k_normalized_rewards.unsqueeze(-1).expand(-1, -1, 1536))
+            top_k_GRPO_paraphase = torch.cat([top_k_GRPO, top_k_paraphase], dim=1)
+
+            # Compute mean of activations
+            top_k_mean_GRPO_paraphase = torch.mean(top_k_GRPO_paraphase, dim=1)
+            
+            # Compute distances of cos sim
+            cos_sim_distance = torch.nn.functional.cosine_similarity(top_k_mean_GRPO_paraphase.unsqueeze(0), 
+                                                                     top_k_mean_GRPO_paraphase.unsqueeze(1), dim=-1)
+            cos_sim_distance_original = torch.nn.functional.cosine_similarity(activations_ai_prompts.unsqueeze(0), 
+                                                                     activations_ai_prompts.unsqueeze(1), dim=-1)
+
+            cos_sim_dist = cos_sim_distance * (1 - torch.eye(4).to(device))
+            cos_sim_dist_orig = cos_sim_distance_original * (1 - torch.eye(4).to(device))
+            penalty = ((cos_sim_dist - cos_sim_dist_orig)**2).sum()
+
+            scale = (0.75 * mean_cos_sim.detach()) / (penalty.detach() + 1e-8)
+            ar_loss = (1 - mean_cos_sim) + (scale * penalty)
             print(f"AR_loss: {ar_loss.item()}")
             # 5.2.2 backprop 
             ar_optimizer.zero_grad()
