@@ -122,24 +122,29 @@ def train(ai_prompts: list[str], paraphrase_prompt: str, av_prompt: str, semanti
             # normalizing  GRPO
             GRPO_mean = torch.mean(cosine_sim_GRPO, dim=-1)
             GRPO_std = torch.std(cosine_sim_GRPO, dim=-1) + 1e-8
+            print(f"GRPO_std: {GRPO_std}")
             GRPO_mean = GRPO_mean.unsqueeze(-1)
             GRPO_std = GRPO_std.unsqueeze(-1)
             normalized_GRPO_scores = (cosine_sim_GRPO - GRPO_mean) / GRPO_std
-                
+            print(f"normalized_GRPO_scores: {normalized_GRPO_scores}")
+
             # normalizing paraphrasing
             paraphrase_mean = torch.mean(cosine_sim_paraphrase, dim=-1)
             paraphrase_std = torch.std(cosine_sim_paraphrase, dim=-1) + 1e-8
+            print(f"paraphrase_std: {paraphrase_std}")
             paraphrase_mean = paraphrase_mean.unsqueeze(-1)
             paraphrase_std = paraphrase_std.unsqueeze(-1)
             normalized_paraphrase_scores = (cosine_sim_paraphrase - paraphrase_mean) / paraphrase_std
-                
+            print(f"normalized_paraphrase_scores: {normalized_paraphrase_scores}")
             
             # normalizing semantic meaning
             semantic_meaning_mean = torch.mean(semantic_meaning_scores, dim=-1)
             semantic_meaning_std = torch.std(semantic_meaning_scores, dim=-1) + 1e-8
+            print(f"semantic_meaning_std: {semantic_meaning_std}")
             semantic_meaning_mean = semantic_meaning_mean.unsqueeze(-1)
             semantic_meaning_std = semantic_meaning_std.unsqueeze(-1)
             normalized_semantic_meaning_scores = (semantic_meaning_scores - semantic_meaning_mean) / semantic_meaning_std
+            print(f"normalized_semantic_meaning_scores: {normalized_semantic_meaning_scores}")
 
             # 4.4.2 scale GRPO, paraphrasing, semantic meaning
             scaled_GRPO_scores = normalized_GRPO_scores * 0.5
@@ -152,9 +157,13 @@ def train(ai_prompts: list[str], paraphrase_prompt: str, av_prompt: str, semanti
             # 4.4.4 Normalized Reward Score
             rewards_mean = torch.mean(rewards, dim=-1)
             rewards_std = torch.std(rewards, dim=-1) + 1e-8
+            print(f"rewards_std: {rewards_std}")
             rewards_mean = rewards_mean.unsqueeze(-1)
             rewards_std = rewards_std.unsqueeze(-1)
             normalized_rewards = (rewards - rewards_mean) / rewards_std
+            print(f"normalized_rewards: {normalized_rewards}")
+
+
 
             reshaped_normalized_rewards = normalized_rewards.reshape(GRPO_size*batch_size)
             # 4.4.2 scale GRPO, paraphrasing, semantic meaning
