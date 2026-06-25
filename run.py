@@ -1,5 +1,4 @@
 import training
-import prompts.ai_questions
 import prompts.av_prompt
 import prompts.paraphrase_prompt
 import prompts.semantic_meaning_prompt
@@ -9,9 +8,9 @@ GRPO_size = 4
 
 
 
-av, ar, activation_model, av_optimizer, ar_optimizer, ar_parameters = training.setup()
+av, ar, activation_model, av_optimizer, ar_optimizer, ar_parameters, buffer_dataset = training.setup()
 
-training.train(ai_prompts=prompts.ai_questions.ai_prompts, 
+training.train(buffer_dataset=buffer_dataset, 
                paraphrase_prompt=prompts.paraphrase_prompt.para_prompt, 
                av_prompt=prompts.av_prompt.av_prompt_, 
                semantic_meaning_prompt=prompts.semantic_meaning_prompt.sm_prompt, 

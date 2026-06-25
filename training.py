@@ -3,8 +3,8 @@ from av_model import AV
 from ar import AR
 import torch
 import itertools
-import random
 import checkpoints
+import dataset
 
 
 def setup():
@@ -42,10 +42,17 @@ def setup():
     av_optimizer = torch.optim.AdamW(av.model.parameters(), lr=1e-4)
     ar_parameters = list(itertools.chain(ar.model.parameters(), ar.value_head.parameters()))
     ar_optimizer = torch.optim.AdamW(ar_parameters, lr=1e-4)
-    return av, ar, activation_model, av_optimizer, ar_optimizer, ar_parameters
+    
+    # 2.2 Get Dataset:
+    buffer_dataset = dataset.get_dataset_buffer()
+    
+    
+    return av, ar, activation_model, av_optimizer, ar_optimizer, ar_parameters, buffer_dataset
+
+
 
     # pt2: TRAINING LOOP: Forward & Backpass
-def train(ai_prompts: list[str], paraphrase_prompt: str, av_prompt: str, semantic_meaning_prompt: str, activation_model, av, ar, av_optimizer, ar_optimizer, total_steps, ar_parameters, batch_size, GRPO_size):    
+def train(buffer_dataset, paraphrase_prompt: str, av_prompt: str, semantic_meaning_prompt: str, activation_model, av, ar, av_optimizer, ar_optimizer, total_steps, ar_parameters, batch_size, GRPO_size):    
     
     # LOAD DEVICE
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")    
@@ -57,9 +64,9 @@ def train(ai_prompts: list[str], paraphrase_prompt: str, av_prompt: str, semanti
             print(f"--------------------STEP : {i} ----------------------------------")
 
             # 0.0 random sample
-            random_ai_prompt = random.sample(ai_prompts, batch_size)
+            base_model_inputs = dataset.sample_dataset(buffer_dataset, batch_size, min_window_size=20, max_window_size=200)
             # 0: EXTRACT ACTIVATIONS
-            activations_ai_prompts = activation_model.extract_activations(layer = 20, prompts =random_ai_prompt)
+            activations_ai_prompts = activation_model.extract_activations(layer=20, prompts=base_model_inputs)
             # 1: av original explanation/GRPO expl, 1.5: extract log_probs
             GRPO_expl, GRPO_log_probs, out_expl = av.av_forward_pass(base_activations=activations_ai_prompts, 
                                                 prompt=av_prompt, 
