@@ -4,3 +4,4 @@ checkpoints/
 hf_cache/
 .agentlens/
 .DS_Store
+.venv/
