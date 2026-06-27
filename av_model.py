@@ -73,5 +73,5 @@ class AV:
         index = torch.unsqueeze(expl_output, dim=-1)
         log_probs = torch.gather(soft_logits[:, len(prompt_token_ids["input_ids"][0])-1:-1, :], dim=-1, index = index)
         log_probs = torch.squeeze(log_probs, dim=-1)
-        sum_log_probs = log_probs.sum(dim=-1)
-        return sum_log_probs
+        mean_log_probs = log_probs.mean(dim=-1)
+        return mean_log_probs
