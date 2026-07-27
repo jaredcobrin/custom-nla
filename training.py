@@ -5,6 +5,11 @@ import torch
 import itertools
 import checkpoints
 import dataset
+import curriculum
+import metrics
+
+EVAL_INTERVAL = 50
+EVAL_BATCH_SIZE = 8
 
 
 def setup():
@@ -24,16 +29,16 @@ def setup():
     #semantic_meaning_prompt_token_ids = activation_model.tokenizer(semantic_meaning_prompt, return_tensors="pt")
 
     # 2: Initialize AR & AV
-    av = AV(model_id="Qwen/Qwen2.5-1.5B", 
-            r_value=16, 
-            target_module=["q_proj", "k_proj", "o_proj", "v_proj"], 
-            lora_alpha=32)
+    av = AV(model_id="Qwen/Qwen2.5-1.5B",
+            r_value=64,
+            target_module=["q_proj", "k_proj", "o_proj", "v_proj"],
+            lora_alpha=128)
     av.model.to(device)
 
-    ar = AR(model_id="Qwen/Qwen2.5-1.5B", 
-            r_value=16,  
-            target_module=["q_proj", "k_proj", "o_proj", "v_proj"], 
-            lora_alpha=32)
+    ar = AR(model_id="Qwen/Qwen2.5-1.5B",
+            r_value=64,
+            target_module=["q_proj", "k_proj", "o_proj", "v_proj"],
+            lora_alpha=128)
     ar.model.to(device)
     ar.value_head.to(device)
 
@@ -45,19 +50,21 @@ def setup():
     
     # 2.2 Get Dataset:
     buffer_dataset = dataset.get_dataset_buffer()
-    
-    
-    return av, ar, activation_model, av_optimizer, ar_optimizer, ar_parameters, buffer_dataset
+
+    # 2.3 Visible-fraction curriculum (see curriculum_plan.md)
+    visible_fraction_curriculum = curriculum.VisibleFractionCurriculum()
+
+    return av, ar, activation_model, av_optimizer, ar_optimizer, ar_parameters, buffer_dataset, visible_fraction_curriculum
 
 
 
     # pt2: TRAINING LOOP: Forward & Backpass
-def train(buffer_dataset, paraphrase_prompt: str, av_prompt: str, semantic_meaning_prompt: str, activation_model, av, ar, av_optimizer, ar_optimizer, total_steps, ar_parameters, batch_size, GRPO_size):    
-    
+def train(buffer_dataset, paraphrase_prompt: str, av_prompt_template: str, semantic_meaning_prompt: str, activation_model, av, ar, av_optimizer, ar_optimizer, total_steps, ar_parameters, batch_size, GRPO_size, curriculum_state):
+
     # LOAD DEVICE
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")    
-    # 0: load checkpoint: 
-    start_step = checkpoints.load_checkpoints(av, ar, av_optimizer, ar_optimizer)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # 0: load checkpoint:
+    start_step = checkpoints.load_checkpoints(av, ar, av_optimizer, ar_optimizer, curriculum_state)
     try:
         for i in range(start_step, total_steps):
 
@@ -67,12 +74,16 @@ def train(buffer_dataset, paraphrase_prompt: str, av_prompt: str, semantic_meani
             base_model_inputs = dataset.sample_dataset(buffer_dataset, batch_size, min_window_size=20, max_window_size=200)
             # 0: EXTRACT ACTIVATIONS
             activations_ai_prompts = activation_model.extract_activations(layer=20, prompts=base_model_inputs)
+            # 0.5: build per-example prompts from the visible-fraction curriculum -
+            # each row gets its own (possibly empty/partial) prefix of its own source text
+            print(f"curriculum_fraction: {curriculum_state.fraction}")
+            av_prompts = [av_prompt_template.format(context=curriculum_state.sample_context(text)) for text in base_model_inputs]
             # 1: av original explanation/GRPO expl, 1.5: extract log_probs
-            GRPO_expl, GRPO_log_probs, out_expl = av.av_forward_pass(base_activations=activations_ai_prompts, 
-                                                prompt=av_prompt, 
-                                                batch_size=batch_size,  
-                                                GRPO_size=GRPO_size, 
-                                                temperature=1.0, 
+            GRPO_expl, GRPO_log_probs, out_expl = av.av_forward_pass(base_activations=activations_ai_prompts,
+                                                prompts=av_prompts,
+                                                batch_size=batch_size,
+                                                GRPO_size=GRPO_size,
+                                                temperature=1.0,
                                                 do_sample=True)
             if (i % 10 == 0):
                 print(f"GRPO_Explanation 0: {GRPO_expl[0]}")
@@ -237,11 +248,31 @@ def train(buffer_dataset, paraphrase_prompt: str, av_prompt: str, semantic_meani
             print(f"AR Gradient_norm: {ar_grad_norm.item()}")
             ar_optimizer.step()
 
+            # 6: zero-context readiness probe (see curriculum_plan.md) - gates
+            # curriculum advancement on FVE measured with NO visible text, so
+            # copying/paraphrasing the current curriculum's context can't inflate it
+            if i % EVAL_INTERVAL == 0:
+                eval_inputs = dataset.sample_dataset(buffer_dataset, EVAL_BATCH_SIZE, min_window_size=20, max_window_size=200)
+                with torch.no_grad():
+                    eval_activations = activation_model.extract_activations(layer=20, prompts=eval_inputs)
+                    zero_context_prompts = [av_prompt_template.format(context="") for _ in eval_inputs]
+                    eval_expl, _, _ = av.av_forward_pass(base_activations=eval_activations,
+                                                          prompts=zero_context_prompts,
+                                                          batch_size=EVAL_BATCH_SIZE,
+                                                          GRPO_size=1,
+                                                          temperature=1.0,
+                                                          do_sample=False)
+                    eval_ar_activations = ar.forward_pass(explanations=eval_expl, batch_size=EVAL_BATCH_SIZE, GRPO_size=1)
+                probe_fve = metrics.compute_fve(eval_ar_activations, eval_activations)
+                advanced = curriculum_state.record_probe_fve(probe_fve)
+                print(f"zero_context_probe_FVE: {probe_fve}")
+                if advanced:
+                    print(f"CURRICULUM ADVANCED -> visible_fraction: {curriculum_state.fraction}")
 
             if i%100 == 0:
-                checkpoints.save_checkpoints(i, av, ar, av_optimizer, ar_optimizer, 10)
+                checkpoints.save_checkpoints(i, av, ar, av_optimizer, ar_optimizer, curriculum_state, 10)
     except KeyboardInterrupt:
-        checkpoints.save_checkpoints(i, av, ar, av_optimizer, ar_optimizer, 10)
+        checkpoints.save_checkpoints(i, av, ar, av_optimizer, ar_optimizer, curriculum_state, 10)
 
 
 

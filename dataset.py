@@ -5,7 +5,9 @@ import random
 
 def get_dataset_buffer():
     # load in and stream dataset
-    entire_dataset = datasets.load_dataset("allenai/c4", "en", split="train", streaming=True)
+    # HuggingFaceFW/fineweb, sample-10BT: matches the NLA paper's own
+    # reproducible datagen config (qwen7b_fineweb_1M.yaml) rather than c4
+    entire_dataset = datasets.load_dataset("HuggingFaceFW/fineweb", "sample-10BT", split="train", streaming=True)
 
     # shuffle order
     dataset = entire_dataset.shuffle(buffer_size=10000)

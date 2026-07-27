@@ -7,7 +7,7 @@ import os
 import shutil
 
 
-def save_checkpoints(step, av, ar, av_optimizer, ar_optimizer, N: int):
+def save_checkpoints(step, av, ar, av_optimizer, ar_optimizer, curriculum_state, N: int):
 
     # making new file for a step
     os.makedirs(f"checkpoints/step_{step:05d}", exist_ok=True)
@@ -21,13 +21,16 @@ def save_checkpoints(step, av, ar, av_optimizer, ar_optimizer, N: int):
     torch.save(av_optimizer.state_dict(), f"checkpoints/step_{step:05d}/av_optimizer.pt")
     torch.save(ar_optimizer.state_dict(), f"checkpoints/step_{step:05d}/ar_optimizer.pt")
 
+    # saving curriculum state (visible-fraction level + rolling probe history)
+    torch.save(curriculum_state.state_dict(), f"checkpoints/step_{step:05d}/curriculum.pt")
+
 
     # Delete oldest checkpoint
     folders = sorted(os.listdir("checkpoints"))
     if len(folders) > N:
         shutil.rmtree(f"checkpoints/{folders[0]}")
 
-def load_checkpoints(av, ar, av_optimizer, ar_optimizer):
+def load_checkpoints(av, ar, av_optimizer, ar_optimizer, curriculum_state):
     if not os.path.exists("checkpoints") or len(os.listdir("checkpoints")) == 0:
         return 0
     # sorting files
@@ -36,7 +39,7 @@ def load_checkpoints(av, ar, av_optimizer, ar_optimizer):
     # Using last one, loading in checkpoint for ar and av lora
     av_loaded = av.model.load_adapter(f"checkpoints/{folders[-1]}/av_lora", adapter_name="default")
     ar_base_loaded = ar.model.load_adapter(f"checkpoints/{folders[-1]}/ar_lora", adapter_name="default")
-    
+
     # storing then loading in value head ar weights
     ar_value_head_stored = torch.load(f"checkpoints/{folders[-1]}/ar_value_head.pt")
     ar.value_head.load_state_dict(ar_value_head_stored)
@@ -47,5 +50,10 @@ def load_checkpoints(av, ar, av_optimizer, ar_optimizer):
 
     ar_optimizer_stored = torch.load(f"checkpoints/{folders[-1]}/ar_optimizer.pt")
     ar_optimizer.load_state_dict(ar_optimizer_stored)
+
+    # restoring curriculum progress (older checkpoints predate this file - stay at level 0)
+    curriculum_path = f"checkpoints/{folders[-1]}/curriculum.pt"
+    if os.path.exists(curriculum_path):
+        curriculum_state.load_state_dict(torch.load(curriculum_path))
 
     return int(folders[-1].replace("step_",""))

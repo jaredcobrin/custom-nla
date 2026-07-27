@@ -8,18 +8,19 @@ GRPO_size = 4
 
 
 
-av, ar, activation_model, av_optimizer, ar_optimizer, ar_parameters, buffer_dataset = training.setup()
+av, ar, activation_model, av_optimizer, ar_optimizer, ar_parameters, buffer_dataset, curriculum_state = training.setup()
 
-training.train(buffer_dataset=buffer_dataset, 
-               paraphrase_prompt=prompts.paraphrase_prompt.para_prompt, 
-               av_prompt=prompts.av_prompt.av_prompt_, 
-               semantic_meaning_prompt=prompts.semantic_meaning_prompt.sm_prompt, 
-               activation_model=activation_model, 
-               av=av, 
-               ar=ar, 
-               av_optimizer=av_optimizer, 
-               ar_optimizer=ar_optimizer, 
-               total_steps=5000, 
-               ar_parameters=ar_parameters, 
-               batch_size=batch_size, 
-               GRPO_size=GRPO_size)
+training.train(buffer_dataset=buffer_dataset,
+               paraphrase_prompt=prompts.paraphrase_prompt.para_prompt,
+               av_prompt_template=prompts.av_prompt.av_prompt_template,
+               semantic_meaning_prompt=prompts.semantic_meaning_prompt.sm_prompt,
+               activation_model=activation_model,
+               av=av,
+               ar=ar,
+               av_optimizer=av_optimizer,
+               ar_optimizer=ar_optimizer,
+               total_steps=5000,
+               ar_parameters=ar_parameters,
+               batch_size=batch_size,
+               GRPO_size=GRPO_size,
+               curriculum_state=curriculum_state)
