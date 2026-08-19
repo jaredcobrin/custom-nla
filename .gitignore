@@ -5,3 +5,6 @@ hf_cache/
 .agentlens/
 .DS_Store
 .venv/
+
+# AI-assistant working notes -- not project content
+CLAUDE.md
